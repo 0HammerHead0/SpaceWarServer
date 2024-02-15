@@ -4,9 +4,8 @@ const httpserver = http.createServer();
 var count_of_clients=0;
 var mySet=new Set();
 var games={};
-var client_ID=new Set();
-httpserver.listen(3000, () => {
-    console.log("Server running at http://localhost:3000/");
+httpserver.listen(3001, () => {
+    console.log("Server running at http://localhost:3001/");
 });
 const clients = {};
 const wsServer = new websocketServer({
@@ -15,6 +14,7 @@ const wsServer = new websocketServer({
 wsServer.on("request", (request) => {
     const connection = request.accept(null, request.origin);
     connection.on("open", () => {
+        console.log("Client connected, PLEASE LOOK OUT FOR THIS LINE IN THE CONSOLE !!!!!!!!!!!!!")
         console.log("Connection opened");
     });
     connection.on("message", (message) => {
@@ -23,49 +23,66 @@ wsServer.on("request", (request) => {
         console.log(receivedData)
         if (receivedData.method === 'createGame') {
             const gameID = guid();
-            const clientId = cuid();
+            const clientID = cuid();
             const payLoad = {
                 method: "connectGame",
                 gameID,
-                clientId,
+                clientID,
             };
-            // console.log(payLoad)
             if(games[String(gameID)] === undefined){
                 games[String(gameID)] = {
                     numberOfPlayers: 1,
                     players: {
-                        [String(clientId)]:{
+                        [String(clientID)]:{
                         "health": 100,
                         "position": [0, 0, 0],
                         "quaternion": [0, 0, 0, 0],
                         "kills": 0,
+                        connection: connection,
                         }
                     }
                 };
             }
-            console.log(games[String(gameID)].players[clientId]);
-            client_ID.add(clientId);
+            console.log(games);
+            console.log(games[String(gameID)].players[clientID]);
             connection.send(JSON.stringify(payLoad));
         }
         if(receivedData.method === 'joinGame'){
-            const clientId = cuid();
-            const payLoad = {
-                method: "JoinGame",
-                gameID: receivedData.gameID,
-                clientId,
-            };
-            console.log(payLoad);
-            games[String(receivedData.gameID)].numberOfPlayers++;
-            if(games[String(receivedData.gameID)].numberOfPlayers === 2){
-                payLoad.startGame = true;
+            const clientID = cuid();
+            if(games[String(receivedData.gameID)] != undefined){
+                var payLoad={};
+                games[String(receivedData.gameID)].numberOfPlayers++;
+                console.log(games[String(receivedData.gameID)].numberOfPlayers);
+                if(games[String(receivedData.gameID)].numberOfPlayers === 2){
+                    payLoad.startGame = true;
+                }
+                games[String(receivedData.gameID)].players[clientID] = {
+                    "health": 100,
+                    "position": [0, 0, 0],
+                    "quaternion": [0, 0, 0, 0],
+                    "kills": 0,
+                };
+                 payLoad = {
+                    method: "connectGameThroughJoin",
+                    gameID: receivedData.gameID,
+                    clientID,
+                };
             }
-            games[String(receivedData.gameID)].players[clientId] = {
-                "health": 100,
-                "position": [0, 0, 0],
-                "quaternion": [0, 0, 0, 0],
-                "kills": 0,
-            };
             connection.send(JSON.stringify(payLoad));
+        }
+        else if(receivedData.method === 'update'){
+            console.log("update method called");
+            console.log(receivedData);
+            console.log(games[String(receivedData.gameID)].players[receivedData.clientID]);
+            games[String(receivedData.gameID)].players[receivedData.clientID].position = receivedData.position;
+            games[String(receivedData.gameID)].players[receivedData.clientID].quaternion = receivedData.quaternion;
+            games[String(receivedData.gameID)].players[receivedData.clientID].health = receivedData.health;
+            games[String(receivedData.gameID)].players[receivedData.clientID].kills = receivedData.kills;
+            for (const playerID in games[String(receivedData.gameID)].players) {
+                if (playerID !== receivedData.clientID) {
+                    games[String(receivedData.gameID)].players[playerID].connection.send(JSON.stringify(games));
+                }
+            }
         }
     });
     connection.on("close", (connection) => {
@@ -75,13 +92,15 @@ wsServer.on("request", (request) => {
         // console.error("WebSocket Error:", error);
     });
     
-    const clientId = guid();
-    clients[clientId] = {
+    const clientID = cuid();
+    const gameID = guid();
+    clients[clientID] = {
         "connection" : connection
     }
     const payLoad = {
         "method" : "connect",
-        "clientId" : clientId
+        "clientID" : clientID,
+        "gameID": gameID,
     }
     connection.send(JSON.stringify(payLoad));
 });
