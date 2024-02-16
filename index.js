@@ -4,8 +4,8 @@ const httpserver = http.createServer();
 var count_of_clients=0;
 var mySet=new Set();
 var games={};
-httpserver.listen(3001, () => {
-    console.log("Server running at http://localhost:3001/");
+httpserver.listen(3000, () => {
+    console.log("Server running");
 });
 const clients = {};
 const wsServer = new websocketServer({
@@ -34,10 +34,10 @@ wsServer.on("request", (request) => {
                     numberOfPlayers: 1,
                     players: {
                         [String(clientID)]:{
-                        "health": 100,
-                        "position": [0, 0, 0],
-                        "quaternion": [0, 0, 0, 0],
-                        "kills": 0,
+                        health: 100,
+                        position: [0, 0, 0],
+                        quaternion: [0, 0, 0, 0],
+                        kills: 0,
                         connection: connection,
                         }
                     }
@@ -47,20 +47,20 @@ wsServer.on("request", (request) => {
             console.log(games[String(gameID)].players[clientID]);
             connection.send(JSON.stringify(payLoad));
         }
+        var payLoad={};
         if(receivedData.method === 'joinGame'){
             const clientID = cuid();
             if(games[String(receivedData.gameID)] != undefined){
-                var payLoad={};
                 games[String(receivedData.gameID)].numberOfPlayers++;
                 console.log(games[String(receivedData.gameID)].numberOfPlayers);
                 if(games[String(receivedData.gameID)].numberOfPlayers === 2){
                     payLoad.startGame = true;
                 }
                 games[String(receivedData.gameID)].players[clientID] = {
-                    "health": 100,
-                    "position": [0, 0, 0],
-                    "quaternion": [0, 0, 0, 0],
-                    "kills": 0,
+                    health: 100,
+                    position: [0, 0, 0],
+                    quaternion: [0, 0, 0, 0],
+                    kills: 0,
                 };
                  payLoad = {
                     method: "connectGameThroughJoin",
@@ -73,23 +73,30 @@ wsServer.on("request", (request) => {
         else if(receivedData.method === 'update'){
             console.log("update method called");
             console.log(receivedData);
+            games[String(receivedData.gameID)].players[receivedData.clientID].position = receivedData.data.position;
+            games[String(receivedData.gameID)].players[receivedData.clientID].quaternion = receivedData.data.quaternion;
+            games[String(receivedData.gameID)].players[receivedData.clientID].health = receivedData.data.health;
+            games[String(receivedData.gameID)].players[receivedData.clientID].kills = receivedData.data.kills;
             console.log(games[String(receivedData.gameID)].players[receivedData.clientID]);
-            games[String(receivedData.gameID)].players[receivedData.clientID].position = receivedData.position;
-            games[String(receivedData.gameID)].players[receivedData.clientID].quaternion = receivedData.quaternion;
-            games[String(receivedData.gameID)].players[receivedData.clientID].health = receivedData.health;
-            games[String(receivedData.gameID)].players[receivedData.clientID].kills = receivedData.kills;
-            for (const playerID in games[String(receivedData.gameID)].players) {
-                if (playerID !== receivedData.clientID) {
-                    games[String(receivedData.gameID)].players[playerID].connection.send(JSON.stringify(games));
-                }
+            // for (const playerID in games[String(receivedData.gameID)].players) {
+            //     games[String(receivedData.gameID)].players[playerID].connection.send(JSON.stringify(games[String(receivedData.gameID)]));
+            // }
+            payLoad = {
+                method: "broadcast",
+                games: games[String(receivedData.gameID)]
             }
+            wsServer.connections.forEach((connection) => {
+                if(connection.connected){
+                    connection.send(JSON.stringify(payLoad));
+                }
+            });
         }
     });
     connection.on("close", (connection) => {
         console.log("Connection closed");
     });
     connection.on("error", (error) => {
-        // console.error("WebSocket Error:", error);
+        console.error("WebSocket Error:", error);
     });
     
     const clientID = cuid();
